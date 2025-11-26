@@ -58,6 +58,7 @@ class RISCV:
         for i, v in enumerate(data):
             addr = self.addr_ptr
             self.rf[get_register_index(f"x{i+18}")] = addr
+            self.rf[get_register_index(f"x{i+24}")] = len(v)
             self.memory[addr:addr+len(v)] = v
             self.addr_ptr += len(v)
 
@@ -69,6 +70,9 @@ class RISCV:
             inst = code[self.pc]
             op = inst.op
             args = inst.args
+
+            # set to true if encounter instruction that modifies self.pc
+            branch = False
 
             match inst.op:
                 case "addi":
@@ -88,4 +92,5 @@ class RISCV:
             # end match
 
             # increment program counter
-            self.pc += 1
+            if not branch:
+                self.pc += 1
