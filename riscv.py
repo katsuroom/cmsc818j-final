@@ -18,6 +18,9 @@ class RISCV:
         # index into self.memory
         self.addr_ptr = 0
 
+        # program counter
+        self.pc = 0
+
         # record runtime metrics
         self.cycles = 0
         self.mem_accesses = 0
@@ -59,11 +62,15 @@ class RISCV:
             self.addr_ptr += len(v)
 
     def run(self, code: list[Instruction]):
-        for inst in code:
+        while True:
+            if self.pc == len(code):
+                break
+            
+            inst = code[self.pc]
             op = inst.op
             args = inst.args
 
-            match(inst.op):
+            match inst.op:
                 case "addi":
                     a = get_register_index(args[0])
                     b = get_register_index(args[1])
@@ -78,5 +85,7 @@ class RISCV:
                 case _:
                     print(f"Instruction '{op}' not recognized.")
                     quit()
+            # end match
 
-        # end for
+            # increment program counter
+            self.pc += 1
