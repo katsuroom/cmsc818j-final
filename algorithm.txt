@@ -1,0 +1,148 @@
+; initialized by loading CSR matrices
+; x17 = number of cols in A (uncompressed)
+; x18 = number of rows in A (uncompressed)
+; x19 = C
+
+; x20 = A::row_ptr
+; x21 = A::col
+; x22 = A::val
+; x23 = B::row_ptr
+; x24 = B::col
+; x25 = B::val
+
+; x26 = A::row_ptr LEN
+; x27 = A::col LEN
+; x28 = A::val LEN
+; x29 = B::row_ptr LEN
+; x30 = B::col LEN
+; x31 = B::val LEN
+
+; initialize vector registers
+
+vconfig 	0b01111111		; 32 bit data, all vector registers enabled
+
+; load CSR data from memory
+
+vsetvl		x1, x26			; length in x26 = 32-bit elements
+vlw 		v1, 0(x20)		; v1 = A::row_ptr
+vsetvl		x1, x27
+vlw			v2, 0(x21)		; v2 = A::col
+vsetvl		x1, x28
+vlw			v3, 0(x22)		; v3 = A::val 
+vsetvl		x1, x29
+vlw			v4, 0(x23)		; v4 = B::row_ptr
+vsetvl		x1, x30
+vlw			v5, 0(x24)		; v5 = B::col
+vsetvl		x1, x31
+vlw			v6, 0(x25)		; v6 = B::val
+
+
+; x1 : x16 are free
+; v7 : v31 are free
+
+; csr x csr begin
+
+add x1, x0, x0						; x1 = row loop counter
+iter_a_rows:
+	beq x18, x1, iter_a_rows_end
+
+	; clear output register Ci, move x0 to all elements in v9
+	vsetvl 		x0, x17		; set vl = COL elements
+	vmv.v.x v9, x0
+	
+	; clear temp vectors
+	vmv.v.x v7, x0
+	vmv.v.x v8, x0
+	
+	; start = A::row[i]
+	vsetvl		x2, x28			; vl = len(A::val)
+	vmv.x.s		x2, v1			; x2 = A::row[i]
+	
+	addi 		x10, x0, 1		; x10 = 1
+	vslideup.vx 	v1, v1, x10		; A::row_ptr << 1
+	
+	vmv.x.s		x3, v1			; x3 = A::row[i+1]
+	
+	sub 		x3, x3, x2		; x3 = n_A in row
+	
+	; iterate elements in row A[i]
+	add 		x4, x0, x0		; x4 = A[i] element counter
+	iter_row_ai:
+		beq 		x4, x3, iter_row_ai_end
+	
+		vsetvl		x0, x27		; vl = len(A::val)
+		vmv.x.s		x5, v2		; x5 = col_idx[a]
+		vmv.x.s		x6, v3		; x6 = val[a]
+		vslideup.vx 	v2, v2, x10	; A::col << 1
+		vslideup.vx	v3, v3, x10	; A::val << 1
+		
+		; multiply A_val by row in B, output in vreg Ci
+		
+		; let B_start = B::row_ptr[col_idx]
+		addi 		x7, x5, 2		; x7 = col_idx + 2
+		vsetvl 		x0, x7			; vl = col_idx + 2
+		vmv.v.v 	v7, v4			; slice of B::row_idx
+		vslideup.vx 	v7, v7, x5		; v7 << col_idx
+
+		vmv.x.s		x7, v7			; x7 = B::row_idx
+		vslideup.vx 	v7, v7, x10
+		vmv.x.s		x8, v7			; x8 = B::row_idx + 1
+		sub 		x8, x8, x7		; x8 = number of elements in B row
+		
+		; get row of B
+		add x9, x7, x8				; x9 = number of elements to copy
+		vsetvl x0, x9				; vl = x9
+		vmv.v.v v7, v5				; v7 = B::col
+		vmv.v.v v8, v6				; v8 = B::val
+		vslideup.vx	v7, v7, x7		; v7 << B::start
+		vslideup.vx	v8, v8, x7		; v8 << B::start
+		; row of B isolated
+		
+		vsetvl x0, x8				; vl = n_B
+		
+		; multiply scalar A by row Bi
+		vmul.vx 	v8, v8, x6		; v8 = a * Bi
+		
+		; store based on index in B::col
+		; accumulate product in vreg Ci
+		
+		; for number of elements in B
+		addi x9, x0, 0				; x9 = loop counter
+		indexed_acc:
+			beq x9, x8, indexed_acc_end
+			
+			; move value to another vector register
+			vmv.x.s		x11, v8			; x11 = b
+			vmv.x.s		x12, v7			; x12 = col_idx
+			vslideup.vx	v8, v8, x10		; v8 << 1
+			vslideup.vx	v7, v7, x10		; v8 << 1
+			vmv.s.x 	v10, x11		; v10[0] = b
+			
+			; shift register based on col_idx
+			vsetvl 		x0, x17				; vl = 16 elements
+			vslidedown.vx	v10, v10, x12	; v10 >> col_idx
+			
+			; copy to Ci
+			vadd.vv v9, v9, v10			; Ci += b
+			
+			; clear vector
+			vmv.v.x v10, x0
+			
+			addi x9, x9, 1			; i++
+			j indexed_acc
+			
+		indexed_acc_end:
+
+		addi x4, x4, 1	; increment element loop counter
+		j iter_row_ai
+	
+	iter_row_ai_end:
+		
+	;store vector Ci into memory
+	vsw v9, 0(x19)
+	add x19, x19, x17	; C += cols
+	
+	addi x1, x1, 1		; increment row loop counter
+	j iter_a_rows
+
+iter_a_rows_end:

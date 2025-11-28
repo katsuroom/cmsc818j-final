@@ -6,8 +6,11 @@ import sys
 import numpy as np
 
 def print_instructions(code: list[Instruction]):
-    for instruction in code:
-        print(instruction)
+    for i, instruction in enumerate(code):
+        print(f"{i:<4}: {instruction}")
+
+def print_labels(labels):
+    print(labels)
 
 def main():
     # expect 1 input file argument
@@ -17,8 +20,9 @@ def main():
     
     # parse instructions
     file = open(sys.argv[1], "r")
-    code: list[Instruction] = parse(file)
+    code, labels = parse(file)
     print_instructions(code)
+    print_labels(labels)
 
     # load input matrices
     A = np.array([
@@ -37,9 +41,11 @@ def main():
     riscv.load_csr(A, B)
 
     # run code
-    riscv.run(code)
+    riscv.run(code, labels)
 
     riscv.print_state()
+
+    riscv.print_result()
 
 if __name__ == "__main__":
     main()

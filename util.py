@@ -10,7 +10,7 @@ def get_register_index(reg: str) -> int:
         return int(reg[1:])
 
     print(f"Register '{reg}' not found.")
-    quit()
+    return -1
 
 class Instruction:
     def __init__(self, op: str, args: list):
