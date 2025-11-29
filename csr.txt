@@ -1,3 +1,5 @@
+; CSR*CSR without new instruction
+
 ; initialized by loading CSR matrices
 ; x17 = number of cols in A (uncompressed)
 ; x18 = number of rows in A (uncompressed)

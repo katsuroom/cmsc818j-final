@@ -28,8 +28,8 @@ class RISCV:
         self.pc = 0
 
         # record runtime metrics
-        self.cycles = 0
-        self.mem_accesses = 0
+        self.cycles = 0         # number of instructions executed
+        self.mem_accesses = 0   # number of elements read/written to memory
 
     def print_state(self):
 
@@ -67,6 +67,28 @@ class RISCV:
             print(f"[{C[i]:>4}]", end="")
             if (i+1) % 4 == 0:
                 print("")
+
+    def load_dense(self, A, B):
+        
+        self.num_elements = len(A[0]) * len(B)
+
+        # store number of cols in A into register
+        self.rf[get_register_index("x17")] = len(A[0])
+
+        # store number of rows in A into register
+        self.rf[get_register_index("x18")] = len(A)
+
+        A = A.reshape(-1)
+        B = B.reshape(-1)
+
+        # store end address into register (C)
+        self.rf[get_register_index("x19")] = len(A) + len(B)
+
+        # copy all data into memory
+        self.rf[get_register_index("x30")] = 0
+        self.rf[get_register_index("x31")] = len(A)
+        self.memory[0:len(A)] = A
+        self.memory[len(A):len(A)+len(B)] = B
 
     def load_csr(self, A, B):
 
@@ -122,6 +144,11 @@ class RISCV:
                     b = get_register_index(args[1])
                     c = get_register_index(args[2])
                     self.rf[a] = self.rf[b] - self.rf[c]
+                case "mul":
+                    a = get_register_index(args[0])
+                    b = get_register_index(args[1])
+                    c = get_register_index(args[2])
+                    self.rf[a] = self.rf[b] * self.rf[c]
                 case "j":
                     label = args[0]
                     if label in labels.keys():
@@ -160,6 +187,7 @@ class RISCV:
                     r = get_register_index(args[2])
                     addr = self.rf[r]
                     self.vrf[v][0:self.vl] = self.memory[addr+offset:addr+offset+self.vl]
+                    self.mem_accesses += self.vl
 
                 # store vl elements into memory as 32-bit elements
                 case "vsw":
@@ -168,6 +196,7 @@ class RISCV:
                     r = get_register_index(args[2])
                     addr = self.rf[r]
                     self.memory[addr+offset:addr+offset+self.vl] = self.vrf[v][0:self.vl]
+                    self.mem_accesses += self.vl
 
                 # copy first element of vector into scalar register
                 case "vmv.x.s":
@@ -222,14 +251,17 @@ class RISCV:
                     vb = get_register_index(args[1])
                     r = get_register_index(args[2])
                     shift = self.rf[r]
-
-                    # print(shift)
-                    # self.print_state()
-                    
-
                     self.vrf[va][shift:self.vl] = self.vrf[vb][0:self.vl-shift]
                     self.vrf[va][0:shift] = 0
-                
+
+                # new instruction: indexed move
+                case "vindexmv":
+                    va = get_register_index(args[0])
+                    vb = get_register_index(args[1])
+                    vc = get_register_index(args[2])
+                    for i in range(self.vl):
+                        idx = self.vrf[vc][i]
+                        self.vrf[va][idx] = self.vrf[vb][i]
 
                 case _:
                     print(f"Instruction '{op}' not recognized.")
@@ -239,6 +271,8 @@ class RISCV:
             # increment program counter
             if not branch:
                 self.pc += 1
+
+            self.cycles += 1
 
             # maintain register x0 = 0
             self.rf[0] = 0

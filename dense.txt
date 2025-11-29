@@ -1,0 +1,67 @@
+; dense*dense
+
+; initialized by loading dense matrices
+; x17 = number of cols in A (uncompressed)
+; x18 = number of rows in A (uncompressed)
+; x19 = C
+
+; x30 = A
+; x31 = B
+
+; initialize vector registers
+
+vconfig 	0b01111111		; 32 bit data, all vector registers enabled
+
+; x1 : x16 are free
+; v7 : v31 are free
+
+addi x10, x0, 1				; x10 = 1
+add x1, x0, x0
+vsetvl x0, x17
+iter_a_rows:
+	beq x18, x1, iter_a_rows_end
+	
+	; v1 = load row of A
+	vlw v1, 0(x30)			; v1 = Ai
+	
+	; A pointer += row size
+	add x30, x30, x17
+	
+	add x2, x0, x0			; x2 = col_idx
+	iter_a_elements:
+		beq x2, x17, iter_a_elements_end
+		
+		vmv.x.s x3, v1		; x3 = a
+		vslideup.vx v1, v1, x10
+		
+		; v2 = load corresponding B row, row idx = i
+		; mem = B + col * idx
+		mul x4, x2, x17
+		add x5, x31, x4		; x5 = B offset
+		vlw v2, 0(x5)
+		
+		; clear v3
+		vmv.v.x v3, x0
+		
+		; multiply element by B row, place in v3
+		vmul.vx 	v3, v2, x3
+		
+		; v4 += v3
+		vadd.vv v4, v4, v3
+		
+		addi x2, x2, 1
+		j iter_a_elements
+	
+	iter_a_elements_end:
+	
+	; store C
+	vsw v4, 0(x19)
+	add x19, x19, x17
+	
+	; clear C
+	vmv.v.x v4, x0
+	
+	addi x1, x1, 1
+	j iter_a_rows
+
+iter_a_rows_end:

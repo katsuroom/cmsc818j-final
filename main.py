@@ -39,6 +39,7 @@ def main():
 
     # load A and B in CSR format into memory
     riscv.load_csr(A, B)
+    # riscv.load_dense(A, B)
 
     # run code
     riscv.run(code, labels)
@@ -46,6 +47,8 @@ def main():
     riscv.print_state()
 
     riscv.print_result()
+
+    print(f"Completed in {riscv.cycles} cycles, {riscv.mem_accesses} memory accesses.")
 
 if __name__ == "__main__":
     main()
