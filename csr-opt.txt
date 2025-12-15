@@ -106,19 +106,24 @@ iter_a_rows:
 		vmul.vx 	v8, v8, x6		; v8 = a * Bi
 		
 		; store based on index in B::col
-        vindexmv    v10, v8, v7
+        ; vindexmv 	v10, v8, v7
+		vscatteracc x8, v8, v7
 
 		; accumulate product in vreg Ci
-        vsetvl x0, x17
-		vadd.vv     v9, v9, v10
-        vmv.v.x v10, x0
+        ; vsetvl x0, x17
+		; vadd.vv     v9, v9, v10
+        ; vmv.v.x v10, x0
 		
 		addi x4, x4, 1	; increment element loop counter
 		j iter_row_ai
 	
 	iter_row_ai_end:
 		
+	; flush accumulator in v9
+	vflush v9
+
 	;store vector Ci into memory
+	vsetvl x0, x17
 	vsw v9, 0(x19)
 	add x19, x19, x17	; C += cols
 	

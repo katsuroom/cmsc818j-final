@@ -24,11 +24,16 @@ class RISCV:
         # special vector length register (corresponds to number of elements)
         self.vl = 0
 
+        # vector accumulator storage for vscatteracc, 16 elements
+        self.vacc = np.zeros(16, dtype=int)
+
         # program counter
         self.pc = 0
 
         # record runtime metrics
         self.cycles = 0         # number of instructions executed
+        self.vsa_count = 0      # number of vscatteracc instructions executed
+        self.vsa_elements = 0   # number of nonzeros moved by vscatteracc
         self.mem_accesses = 0   # number of elements read/written to memory
 
     def print_state(self):
@@ -255,13 +260,33 @@ class RISCV:
                     self.vrf[va][0:shift] = 0
 
                 # new instruction: indexed move
-                case "vindexmv":
+                # case "vindexmv":
+                #     va = get_register_index(args[0])
+                #     vb = get_register_index(args[1])
+                #     vc = get_register_index(args[2])
+                #     for i in range(self.vl):
+                #         idx = self.vrf[vc][i]
+                #         self.vrf[va][idx] = self.vrf[vb][i]
+
+                # vscatteracc r_len, v_values, v_indices
+                case "vscatteracc":
+                    r = get_register_index(args[0])
+                    va = get_register_index(args[1])
+                    vb = get_register_index(args[2])
+                    num_elements = self.rf[r]
+                    
+                    self.vsa_count += 1
+                    self.vsa_elements += num_elements
+
+                    for i in range(num_elements):
+                        idx = self.vrf[vb][i]
+                        self.vacc[idx] += self.vrf[va][i]
+
+                # vflush v_dest
+                case "vflush":
                     va = get_register_index(args[0])
-                    vb = get_register_index(args[1])
-                    vc = get_register_index(args[2])
-                    for i in range(self.vl):
-                        idx = self.vrf[vc][i]
-                        self.vrf[va][idx] = self.vrf[vb][i]
+                    self.vrf[va][0:len(self.vacc)] = self.vacc[:]
+                    self.vacc[:] = 0
 
                 case _:
                     print(f"Instruction '{op}' not recognized.")

@@ -48,7 +48,10 @@ def main():
 
     riscv.print_result()
 
-    print(f"Completed in {riscv.cycles} cycles, {riscv.mem_accesses} memory accesses.")
+    print(f"Completed in {riscv.cycles} instructions.")
+    print(f"- {riscv.vsa_count} vscatteracc used")
+    print(f"- {riscv.vsa_elements} elements moved by vscatteracc")
+    print(f"- {riscv.mem_accesses} memory accesses")
 
 if __name__ == "__main__":
     main()
