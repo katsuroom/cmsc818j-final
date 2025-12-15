@@ -141,6 +141,7 @@ iter_a_rows:
 	iter_row_ai_end:
 		
 	;store vector Ci into memory
+	vsetvl x0, x17
 	vsw v9, 0(x19)
 	add x19, x19, x17	; C += cols
 	
